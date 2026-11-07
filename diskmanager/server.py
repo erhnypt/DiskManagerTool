@@ -3,6 +3,8 @@ import argparse
 import json
 import os
 import shutil
+import subprocess
+import sys
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
@@ -43,6 +45,17 @@ def type_stats(root):
     out = [{"ext": k, "size": v[0], "count": v[1]} for k, v in stats.items()]
     out.sort(key=lambda x: x["size"], reverse=True)
     return out
+
+
+def reveal(full):
+    """Show a file in the OS file manager (Finder on macOS)."""
+    if sys.platform == "darwin":
+        cmd = ["open", "-R", full]
+    elif sys.platform.startswith("win"):
+        cmd = ["explorer", "/select,", full]
+    else:
+        cmd = ["xdg-open", full if os.path.isdir(full) else os.path.dirname(full)]
+    subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -97,6 +110,21 @@ class Handler(BaseHTTPRequestHandler):
                 scanner.start(data.get("path") or os.path.expanduser("~"))
             except (ValueError, RuntimeError) as e:
                 return self._json({"error": str(e)}, 400)
+            self._json({"ok": True})
+        elif self.path == "/api/reveal":
+            # Only paths inside the scanned tree are accepted (looked up in the
+            # tree, never taken verbatim from the client).
+            parts = [p for p in str(data.get("path", "")).split("/") if p]
+            n = scanner.find(parts) if scanner.root else None
+            if n is None:
+                return self._json({"error": "not found"}, 404)
+            full = n.path(scanner.root_path)
+            if not os.path.lexists(full):
+                return self._json({"error": "file no longer exists"}, 404)
+            try:
+                reveal(full)
+            except OSError as e:
+                return self._json({"error": str(e)}, 500)
             self._json({"ok": True})
         elif self.path == "/api/cancel":
             scanner.cancel()

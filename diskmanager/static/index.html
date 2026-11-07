@@ -21,14 +21,14 @@ main{flex:1;display:flex;min-height:0}
 .row .n{flex:1;overflow:hidden;text-overflow:ellipsis}.row .s{color:var(--mut);font-variant-numeric:tabular-nums}
 .sw{width:12px;height:12px;border-radius:3px;flex:none}.tw{width:12px;color:var(--mut);cursor:pointer;flex:none;text-align:center}
 #tip{position:fixed;pointer-events:none;background:#000d;color:#fff;padding:6px 8px;border-radius:6px;font-size:12px;display:none;max-width:420px;word-break:break-all}
-#info{padding:6px 10px;border-top:1px solid var(--line);min-height:30px;color:var(--mut)}
+#infotxt{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}#info{display:flex;gap:10px;align-items:center;padding:6px 10px;border-top:1px solid var(--line);min-height:30px;color:var(--mut)}
 @media(max-width:800px){#types{display:none}#tree{width:200px}}
 </style></head><body>
 <header><input id="path" placeholder="Taranacak klasör (örn. /Users/ben)"><button id="scan">Tara</button><button id="cancel">Durdur</button></header>
 <div id="status">Hazır</div>
 <main>
   <div id="tree"></div>
-  <div id="center"><div id="crumbs"></div><div id="map"><canvas id="cv"></canvas></div><div id="info">Bir dosyanın üzerine gel. Çift tıkla: klasöre yakınlaş.</div></div>
+  <div id="center"><div id="crumbs"></div><div id="map"><canvas id="cv"></canvas></div><div id="info"><span id="infotxt">Bir dosyanın üzerine gel. Çift tıkla: klasöre yakınlaş.</span><button id="reveal" disabled>Finder'da göster</button></div></div>
   <div id="types"></div>
 </main><div id="tip"></div>
 <script>
@@ -41,7 +41,7 @@ function color(ext){if(colors[ext])return colors[ext];
   const i=types.findIndex(t=>t.ext===ext);
   const h=i>=0&&i<12?(i*137.5)%360:hue(ext);
   return colors[ext]=`hsl(${h},65%,55%)`}
-let cur=[],view=null,tiles=[],selTile=null,rootPath='';
+let selPath=null,cur=[],view=null,tiles=[],selTile=null,rootPath='';
 const cv=$('cv'),ctx=cv.getContext('2d');
 
 $('scan').onclick=async()=>{const r=await api('/api/scan',{method:'POST',body:JSON.stringify({path:$('path').value})});
@@ -58,7 +58,7 @@ async function load(){
   renderTypes();cur=[];await navigate([]);renderTree()
 }
 async function navigate(parts){cur=parts;view=await api('/api/node?depth=5&path='+encodeURIComponent(parts.join('/')));
-  selTile=null;crumbs();draw();markTree()}
+  selTile=null;select(null);crumbs();draw();markTree()}
 function crumbs(){const c=$('crumbs');c.innerHTML='';
   const add=(label,parts)=>{const a=document.createElement('a');a.textContent=label;a.onclick=()=>navigate(parts);c.append(a)};
   add(rootPath||'/',[]);cur.forEach((p,i)=>{c.append(' / ');add(p,cur.slice(0,i+1))});
@@ -96,7 +96,11 @@ cv.onmousemove=e=>{const t=hit(e),tip=$('tip');if(!t){tip.style.display='none';r
   tip.style.display='block';tip.style.left=e.clientX+14+'px';tip.style.top=e.clientY+14+'px';
   tip.textContent=`${t.path.join('/')}\n${fmt(t.it.size)}`;tip.style.whiteSpace='pre'};
 cv.onmouseleave=()=>$('tip').style.display='none';
-cv.onclick=e=>{selTile=hit(e)||null;draw();if(selTile)$('info').textContent=`${rootPath}/${selTile.path.join('/')} — ${fmt(selTile.it.size)}`};
+function select(parts,size){selPath=parts;$('reveal').disabled=!parts;
+  $('infotxt').textContent=parts?`${rootPath}/${parts.join('/')} — ${fmt(size)}`:''}
+cv.onclick=e=>{selTile=hit(e)||null;draw();selTile?select(selTile.path,selTile.it.size):select(null)};
+$('reveal').onclick=async()=>{if(!selPath)return;const r=await api('/api/reveal',{method:'POST',body:JSON.stringify({path:selPath.join('/')})});
+  if(r.error)$('infotxt').textContent=r.error};
 cv.ondblclick=e=>{const t=hit(e);if(t){const parts=t.path.slice(0,t.path.length-1);navigate(parts.length>cur.length?parts.slice(0,cur.length+1):parts)}};
 addEventListener('resize',draw);
 
@@ -117,7 +121,7 @@ function treeRow(n,path,depth,total){const wrap=document.createElement('div');
       for(const c of d.children||[])kids.append(treeRow(c,[...path,c.name],depth+1,total))}
     kids.hidden=!kids.hidden;tw.textContent=kids.hidden?'▸':'▾'}
   tw.onclick=e=>{e.stopPropagation();toggle()};
-  row.onclick=()=>{if(n.dir)navigate(path);else navigate(path.slice(0,-1))};
+  row.onclick=async()=>{await navigate(n.dir?path:path.slice(0,-1));select(path,n.size)};
   wrap.append(row,kids);return wrap}
 function markTree(){document.querySelectorAll('#tree .row').forEach(r=>r.classList.toggle('sel',r.dataset.path===cur.join('/')))}
 const esc=s=>s.replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));

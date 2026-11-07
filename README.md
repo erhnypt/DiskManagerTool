@@ -11,4 +11,5 @@ python3 -m unittest discover -s tests -t .
 - Treemap: alan = disk üzerindeki gerçek boyut (`st_blocks`), renk = dosya türü
 - Sol: tembel yüklenen klasör ağacı; sağ: dosya türü istatistikleri
 - Çift tıkla: klasöre yakınlaş; üstte breadcrumb
+- Bir dosya seçip "Finder'da göster" (macOS `open -R`; Linux`xdg-open`, Windows `explorer /select`)
 - Symlink'ler izlenmez, hardlink'ler bir kez sayılır; sunucu yalnızca 127.0.0.1'e bağlanır
