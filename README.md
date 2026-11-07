@@ -5,7 +5,7 @@ Disk Inventory X benzeri disk kullanım görselleştirici. Python (yalnızca sta
 ## Kolay başlatma
 
 - **`DiskManager.command`** dosyasına çift tıkla (Finder'da). Terminal açılır, tarayıcı gelir; durdurmak için pencereyi kapat.
-- **Terminalsiz uygulama:** bir kez `./make_app.sh` çalıştır; `~/Applications/Disk Manager.app` oluşur. Spotlight/Launchpad'den aç, sunucu arka planda başlar (günlük: `~/Library/Logs/DiskManager.log`). Zaten çalışıyorsa yalnızca tarayıcıyı açar. Durdurmak: `pkill -f 'python3 -m diskmanager'`. Proje klasörünü taşırsan scripti yeniden çalıştır.
+- **Terminalsiz uygulama:** bir kez `./make_app.sh` çalıştır; `~/Applications/Disk Manager.app` oluşur. Spotlight/Launchpad'den aç, sunucu arka planda başlar (günlük: `~/Library/Logs/DiskManager.log`). Zaten çalışıyorsa yalnızca tarayıcıyı açar; sunucu eski kodla çalışıyorsa (ör. `git pull` sonrası) kendiliğinden yeniden başlatılır. Durdurmak: `pkill -f 'python3 -m diskmanager'`. Proje klasörünü taşırsan scripti yeniden çalıştır.
 - İlk açılışta macOS "geliştirici doğrulanamadı" derse: sağ tık → Aç.
 
 ## Tüm disk taraması

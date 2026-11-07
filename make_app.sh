@@ -24,6 +24,14 @@ REPO="$REPO"
 PORT=\${DISKMANAGER_PORT:-8765}
 URL="http://127.0.0.1:\$PORT/"
 OPEN=\$(command -v open || command -v xdg-open)
+# Restart the background server if it runs outdated code (e.g. after git pull).
+if curl -s -o /dev/null "\${URL}api/status"; then
+  NEW=\$(cd "\$REPO" && python3 -c "from diskmanager.server import code_version; print(code_version())" 2>/dev/null)
+  RUN=\$(curl -s "\${URL}api/version" | sed -n 's/.*"version": "\\([0-9a-f]*\\)".*/\\1/p')
+  if [ -n "\$NEW" ] && [ "\$NEW" != "\$RUN" ]; then
+    pkill -f "diskmanager --no-browser --port \$PORT"; sleep 1
+  fi
+fi
 if ! curl -s -o /dev/null "\${URL}api/status"; then
   mkdir -p "\$HOME/Library/Logs"
   cd "\$REPO" || exit 1

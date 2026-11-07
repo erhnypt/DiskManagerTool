@@ -1,5 +1,6 @@
 """Local web server: JSON API + static treemap UI. Standard library only."""
 import argparse
+import hashlib
 import json
 import os
 import shutil
@@ -19,6 +20,22 @@ scanner = Scanner()
 # validated against this so the client can never name arbitrary paths.
 app_cache = {}
 cache_items = {}  # path -> item from the last /api/caches listing
+
+
+def code_version():
+    """Hash of the app's source and UI files. The launcher compares it with the
+    running server's value so an outdated background server gets restarted."""
+    h = hashlib.sha1()
+    base = os.path.dirname(__file__)
+    for root, _, files in sorted(os.walk(base)):
+        for f in sorted(files):
+            if f.endswith((".py", ".html")):
+                with open(os.path.join(root, f), "rb") as fh:
+                    h.update(fh.read())
+    return h.hexdigest()[:12]
+
+
+VERSION = code_version()
 
 
 def node_json(n, depth):
@@ -78,7 +95,9 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         u = urlparse(self.path)
         q = parse_qs(u.query)
-        if u.path == "/api/status":
+        if u.path == "/api/version":
+            self._json({"version": VERSION})
+        elif u.path == "/api/status":
             self._json({"running": scanner.running, "files": scanner.files_seen,
                         "bytes": scanner.bytes_seen, "current": scanner.current,
                         "errors": scanner.errors, "root": scanner.root_path,
