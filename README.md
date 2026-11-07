@@ -4,14 +4,17 @@ Disk Inventory X benzeri disk kullanım görselleştirici. Python (yalnızca sta
 
 ## Kolay başlatma
 
-- **`DiskManager.command`** dosyasına çift tıkla (Finder'da). Terminal açılır, tarayıcı gelir; durdurmak için pencereyi kapat.
-- **Terminalsiz uygulama:** bir kez `./make_app.sh` çalıştır; `~/Applications/Disk Manager.app` oluşur. Spotlight/Launchpad'den aç, sunucu arka planda başlar (günlük: `~/Library/Logs/DiskManager.log`). Zaten çalışıyorsa yalnızca tarayıcıyı açar; sunucu eski kodla çalışıyorsa (ör. `git pull` sonrası) kendiliğinden yeniden başlatılır. Durdurmak: `./stop.sh`. Sunucu çökerse gözetmen onu yeniden başlatır ve çıkış kodunu günlüğe yazar. Proje klasörünü taşırsan scripti yeniden çalıştır.
+- **`DiskManager.command`** dosyasına çift tıkla (Finder'da). Terminal açılır, sunucu o pencerede çalışır, tarayıcı gelir. Durdurmak için pencereyi kapat.
+- **`./make_app.sh`** bir kez çalıştırılırsa `~/Applications/Disk Manager.app` oluşur (Spotlight'tan açılır); bu uygulama yalnızca `DiskManager.command`'ı Terminal'de açar.
+  Sunucuyu uygulamanın arka plan sürecine koymak denendi ama macOS o süreci kapattığı için vazgeçildi.
+- Zaten çalışan aynı sürüm varsa yalnızca tarayıcı açılır; `git pull` sonrası eski sunucu kendiliğinden kapatılıp yenisi başlatılır.
+- Sorun olursa `Teshis.command` bilgileri toplar ve panoya kopyalar.
 - İlk açılışta macOS "geliştirici doğrulanamadı" derse: sağ tık → Aç.
 
 ## Tüm disk taraması
 
 Uygulama açılır açılmaz **tüm diski (`/`) kendiliğinden tarar**, klasör sormaz; "Yeniden tara" düğmesi aynısını tekrarlar. Sanal dosya sistemleri, `/Volumes` ve macOS'ta `/System/Volumes` (Data birimi firmlink'lerle zaten `/Users` vb. olarak görünür, ayrıca taramak her şeyi iki kez sayardı) atlanır.
-**Önemli:** macOS izin vermeyen klasörleri (Mail, Fotoğraflar, Safari…) okuyamaz. Tam sonuç için *Sistem Ayarları → Gizlilik ve Güvenlik → Tam Disk Erişimi*'ne Terminal'i (veya `DiskManager.command` açtığın uygulamayı) ekle. Okunamayan öğe sayısı durum çubuğunda görünür.
+**Önemli:** macOS izin vermeyen klasörleri (Mail, Fotoğraflar, Safari…) okuyamaz. Tam sonuç için *Sistem Ayarları → Gizlilik ve Güvenlik → Tam Disk Erişimi*'ne Terminal'i  ekle. Okunamayan öğe sayısı durum çubuğunda görünür.
 
 ## Komut satırı
 
