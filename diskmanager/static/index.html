@@ -23,21 +23,25 @@ main{flex:1;display:flex;min-height:0}
 #tip{position:fixed;pointer-events:none;background:#000d;color:#fff;padding:6px 8px;border-radius:6px;font-size:12px;display:none;max-width:420px;word-break:break-all}
 #infotxt{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}#info{display:flex;gap:10px;align-items:center;padding:6px 10px;border-top:1px solid var(--line);min-height:30px;color:var(--mut)}
 #apps{flex:1;display:flex;min-height:0;position:absolute;left:0;right:0;top:calc(var(--hh,82px));bottom:0;background:var(--bg)}
-#apps[hidden]{display:none}#applist{width:340px;overflow:auto;border-right:1px solid var(--line);background:var(--pane)}
+#caches{position:absolute;left:0;right:0;top:var(--hh,82px);bottom:0;background:var(--bg);display:flex}#caches[hidden],#apps[hidden]{display:none}#cmain{flex:1;display:flex;flex-direction:column;min-width:0}#chead{padding:10px;border-bottom:1px solid var(--line);color:var(--mut)}#clist{flex:1;overflow:auto}#appleft{width:340px;display:flex;flex-direction:column;border-right:1px solid var(--line);background:var(--pane);min-height:0}#appq,#cq{margin:6px;padding:6px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--fg)}#applist{flex:1;overflow:auto}
 #appdetail{flex:1;display:flex;flex-direction:column;min-width:0}#apphead{padding:10px;font-weight:600;border-bottom:1px solid var(--line)}
 #appfiles{flex:1;overflow:auto}#appbar{display:flex;gap:12px;align-items:center;padding:8px 10px;border-top:1px solid var(--line)}#apptot{flex:1;color:var(--mut);text-align:right}
 @media(max-width:800px){#side{display:none}#tree{width:200px}}
 </style></head><body>
-<header><input id="path" placeholder="Taranacak klasör (örn. /Users/ben)"><button id="scan">Tara</button><button id="cancel">Durdur</button><button id="tab">Uygulamalar</button></header>
+<header><input id="path" placeholder="Taranacak klasör (örn. /Users/ben)"><button id="scan">Tara</button><button id="cancel">Durdur</button><button id="tab">Uygulamalar</button><button id="ctab">Önbellek</button></header>
 <div id="status">Hazır</div>
 <main>
   <div id="tree"></div>
   <div id="center"><div id="crumbs"></div><div id="map"><canvas id="cv"></canvas></div><div id="info"><span id="infotxt">Bir dosyanın üzerine gel. Çift tıkla: klasöre yakınlaş.</span><button id="reveal" disabled>Finder'da göster</button><button id="rm" disabled>Çöp Kutusu'na taşı</button></div></div>
   <div id="side"><div id="stabs"><a id="t1" class="on">Türler</a><a id="t2">En büyük 100</a></div><div id="types"></div></div>
 </main><section id="apps" hidden>
-  <div id="applist"></div>
+  <div id="appleft"><input id="appq" placeholder="Uygulama ara…"><div id="applist"></div></div>
   <div id="appdetail"><div id="apphead">Soldan bir uygulama seç.</div><div id="appfiles"></div>
     <div id="appbar"><label><input type="checkbox" id="rmapp" checked> Uygulamanın kendisini de kaldır</label><span id="apptot"></span><button id="trash" disabled>Çöp Kutusu'na taşı</button></div></div>
+</section><section id="caches" hidden>
+  <div id="cmain"><div id="chead">~/Library/Caches ve ~/Library/Logs — uygulamalar bunları yeniden üretir. Taşımak istediklerini işaretle.</div>
+    <input id="cq" placeholder="Filtrele…"><div id="clist"></div>
+    <div id="appbar"><button id="call">Tümünü seç</button><button id="cnone">Seçimi kaldır</button><span id="ctot"></span><button id="ctrash" disabled>Çöp Kutusu'na taşı</button></div></div>
 </section><div id="tip"></div>
 <script>
 const $=id=>document.getElementById(id);
@@ -150,12 +154,15 @@ const esc=s=>s.replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
 
 // ---- AppCleaner ----
 let apps=[],curApp=null,files=[];
-$('tab').onclick=async()=>{const a=$('apps');a.hidden=!a.hidden;$('tab').textContent=a.hidden?'Uygulamalar':'Diskim';
-  document.documentElement.style.setProperty('--hh',($('status').getBoundingClientRect().bottom)+'px');
-  if(!a.hidden)loadApps()};
+function panel(which){const hh=$('status').getBoundingClientRect().bottom;document.documentElement.style.setProperty('--hh',hh+'px');
+  const open=$(which).hidden;$('apps').hidden=$('caches').hidden=true;$('tab').textContent='Uygulamalar';$('ctab').textContent='Önbellek';
+  if(open){$(which).hidden=false;(which==='apps'?$('tab'):$('ctab')).textContent='Diskim';return true}return false}
+$('tab').onclick=()=>{if(panel('apps'))loadApps()};
+$('ctab').onclick=()=>{if(panel('caches'))loadCaches()};
+$('appq').oninput=e=>{const q=e.target.value.toLowerCase();document.querySelectorAll('#applist .row').forEach(r=>r.hidden=!r.dataset.q.includes(q))};
 async function loadApps(){const el=$('applist');el.textContent='Yükleniyor…';apps=await api('/api/apps');el.innerHTML='';
   if(!apps.length)el.textContent='Uygulama bulunamadı (yalnızca macOS /Applications).';
-  for(const a of apps){const r=document.createElement('div');r.className='row';
+  for(const a of apps){const r=document.createElement('div');r.className='row';r.dataset.q=(a.name+' '+a.bundle_id).toLowerCase();
     r.innerHTML=`<span class="n">${esc(a.name)}</span><span class="s">${fmt(a.size)}</span>`;
     r.onclick=()=>{document.querySelectorAll('#applist .row').forEach(x=>x.classList.remove('sel'));r.classList.add('sel');pickApp(a)};el.append(r)}}
 async function pickApp(a){curApp=a;$('apphead').textContent=a.name+(a.version?' '+a.version:'')+(a.protected?' (sistem uygulaması — kaldırılamaz)':'');
@@ -174,5 +181,23 @@ $('trash').onclick=async()=>{const c=checked(),rm=$('rmapp').checked;
   if(r.error)return alert(r.error);
   alert(`${r.moved.length} öğe taşındı`+(r.failed.length?`, ${r.failed.length} başarısız:\n`+r.failed.map(f=>f.error).join('\n'):''));
   loadApps();$('appfiles').innerHTML='';$('apphead').textContent='Soldan bir uygulama seç.'};
+
+// ---- Cache cleanup ----
+let citems=[];
+async function loadCaches(){const el=$('clist');el.textContent='Yükleniyor…';citems=await api('/api/caches');el.innerHTML='';$('cq').value='';
+  if(!citems.length)el.textContent='Önbellek bulunamadı (~/Library yalnızca macOS).';
+  citems.forEach((c,i)=>{const r=document.createElement('label');r.className='row';r.dataset.q=c.name.toLowerCase();
+    r.innerHTML=`<input type="checkbox" data-i="${i}"><span class="n" title="${esc(c.path)}">${esc(c.name)}</span><span class="s">${c.kind} · ${fmt(c.size)}</span>`;
+    r.querySelector('input').onchange=ctotals;el.append(r)});ctotals()}
+const cchecked=()=>[...document.querySelectorAll('#clist input:checked')].map(i=>citems[+i.dataset.i]);
+function ctotals(){const c=cchecked();$('ctot').textContent=`${c.length} öğe · ${fmt(c.reduce((a,x)=>a+x.size,0))}`;$('ctrash').disabled=!c.length}
+$('cq').oninput=e=>{const q=e.target.value.toLowerCase();document.querySelectorAll('#clist .row').forEach(r=>r.hidden=!r.dataset.q.includes(q))};
+const setAll=v=>{document.querySelectorAll('#clist .row:not([hidden]) input').forEach(i=>i.checked=v);ctotals()};
+$('call').onclick=()=>setAll(true);$('cnone').onclick=()=>setAll(false);
+$('ctrash').onclick=async()=>{const c=cchecked();
+  if(!confirm(`${c.length} öğe (${fmt(c.reduce((a,x)=>a+x.size,0))}) Çöp Kutusu'na taşınsın mı?`))return;
+  const r=await api('/api/cache-trash',{method:'POST',body:JSON.stringify({paths:c.map(x=>x.path)})});
+  if(r.error)return alert(r.error);
+  alert(`${r.moved.length} öğe taşındı`+(r.failed.length?`, ${r.failed.length} başarısız`:''));loadCaches()};
 poll();
 </script></body></html>

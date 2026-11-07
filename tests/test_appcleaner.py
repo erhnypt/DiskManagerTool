@@ -58,3 +58,14 @@ class AppCleanerTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class CacheListTest(unittest.TestCase):
+    def test_list_caches_sorted(self):
+        with tempfile.TemporaryDirectory() as t:
+            touch(f"{t}/Caches/a/x", b"x" * 100_000)
+            touch(f"{t}/Caches/b/x", b"x" * 5_000)
+            touch(f"{t}/Logs/l.log", b"x" * 20_000)
+            items = ac.list_caches(t)
+            self.assertEqual([i["name"] for i in items], ["a", "l.log", "b"])
+            self.assertEqual(items[1]["kind"], "Günlük")

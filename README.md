@@ -26,3 +26,8 @@ işaretlediklerini **Çöp Kutusu'na taşır** (kalıcı silme yok). Eşleşme m
 - Sağ panelde **En büyük 100** sekmesi: bir satıra tıklayınca treemap'te o dosyaya gider ve seçer.
 - Treemap/ağaçta seçilen öğe için **Çöp Kutusu'na taşı** (onaylı, kalıcı silme yok). Taşınınca boyutlar ve listeler anında güncellenir.
 - Yalnızca taranmış ağaçtaki yollar kabul edilir; tarama kökünün kendisi taşınamaz.
+
+## Arama ve Önbellek temizliği
+
+- **Uygulamalar** sekmesinde üstteki kutu uygulamaları ad veya bundle id'ye göre filtreler.
+- **Önbellek** sekmesi `~/Library/Caches` ve `~/Library/Logs` içindeki üst düzey öğeleri boyuta göre listeler; işaretlediklerini Çöp Kutusu'na taşır. Yalnızca son listelemedeki yollar kabul edilir.

@@ -18,6 +18,7 @@ scanner = Scanner()
 # id -> (app, {path: leftover}) from the last lookup; trash requests are
 # validated against this so the client can never name arbitrary paths.
 app_cache = {}
+cache_items = {}  # path -> item from the last /api/caches listing
 
 
 def node_json(n, depth):
@@ -110,6 +111,11 @@ class Handler(BaseHTTPRequestHandler):
             for a in apps:
                 app_cache[a["id"]] = (a, None)
             self._json(apps)
+        elif u.path == "/api/caches":
+            items = appcleaner.list_caches()
+            cache_items.clear()
+            cache_items.update({i["path"]: i for i in items})
+            self._json(items)
         elif u.path == "/api/app-files":
             entry = app_cache.get(int(q.get("id", ["-1"])[0]))
             if entry is None:
@@ -167,6 +173,15 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json({"error": failed[0]["error"]}, 500)
             scanner.remove(n)
             self._json({"ok": True, "size": n.size})
+        elif self.path == "/api/cache-trash":
+            paths = data.get("paths") or []
+            bad = [p for p in paths if p not in cache_items]
+            if bad or not paths:
+                return self._json({"error": "paths not allowed", "paths": bad}, 400)
+            moved, failed = appcleaner.move_to_trash(paths)
+            for p in moved:
+                cache_items.pop(p, None)
+            self._json({"moved": moved, "failed": failed})
         elif self.path == "/api/app-trash":
             entry = app_cache.get(data.get("id"))
             if entry is None or entry[1] is None:
