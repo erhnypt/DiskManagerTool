@@ -13,3 +13,10 @@ python3 -m unittest discover -s tests -t .
 - Çift tıkla: klasöre yakınlaş; üstte breadcrumb
 - Bir dosya seçip "Finder'da göster" (macOS `open -R`; Linux`xdg-open`, Windows `explorer /select`)
 - Symlink'ler izlenmez, hardlink'ler bir kez sayılır; sunucu yalnızca 127.0.0.1'e bağlanır
+
+## AppCleaner
+
+Üstteki **Uygulamalar** sekmesi `/Applications` ve `~/Applications` içindeki uygulamaları boyutlarıyla listeler.
+Bir uygulamayı seçince `~/Library` altındaki artık dosyalar (Application Support, Caches, Preferences, Containers, …) bulunur;
+işaretlediklerini **Çöp Kutusu'na taşır** (kalıcı silme yok). Eşleşme muhafazakâr: bundle id veya tam uygulama adı.
+`com.apple.*` sistem uygulamaları kaldırılamaz; sunucu yalnızca son aramada listelenen yolları kabul eder.

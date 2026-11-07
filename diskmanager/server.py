@@ -9,11 +9,15 @@ import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
 
+from . import appcleaner
 from .scanner import Scanner, extension
 
 STATIC = os.path.join(os.path.dirname(__file__), "static")
 MAX_CHILDREN = 400  # per directory sent to the UI; the rest is merged into "other"
 scanner = Scanner()
+# id -> (app, {path: leftover}) from the last lookup; trash requests are
+# validated against this so the client can never name arbitrary paths.
+app_cache = {}
 
 
 def node_json(n, depth):
@@ -92,6 +96,23 @@ class Handler(BaseHTTPRequestHandler):
             if scanner.root is None:
                 return self._json({"error": "no scan"}, 404)
             self._json(type_stats(scanner.root))
+        elif u.path == "/api/apps":
+            apps = appcleaner.list_apps()
+            for i, a in enumerate(apps):
+                a["id"] = i
+                a["protected"] = appcleaner.is_protected(a)
+            app_cache.clear()
+            for a in apps:
+                app_cache[a["id"]] = (a, None)
+            self._json(apps)
+        elif u.path == "/api/app-files":
+            entry = app_cache.get(int(q.get("id", ["-1"])[0]))
+            if entry is None:
+                return self._json({"error": "unknown app, reload list"}, 404)
+            app = entry[0]
+            files = appcleaner.find_leftovers(app)
+            app_cache[app["id"]] = (app, {f["path"]: f for f in files})
+            self._json({"app": app, "files": files})
         elif u.path == "/api/disk":
             p = scanner.root_path or os.path.expanduser("~")
             t, used, free = shutil.disk_usage(p)
@@ -126,6 +147,24 @@ class Handler(BaseHTTPRequestHandler):
             except OSError as e:
                 return self._json({"error": str(e)}, 500)
             self._json({"ok": True})
+        elif self.path == "/api/app-trash":
+            entry = app_cache.get(data.get("id"))
+            if entry is None or entry[1] is None:
+                return self._json({"error": "unknown app, reload"}, 404)
+            app, allowed = entry
+            if appcleaner.is_protected(app):
+                return self._json({"error": "system apps cannot be removed"}, 403)
+            paths = data.get("paths") or []
+            valid = set(allowed)
+            if data.get("remove_app"):
+                valid.add(app["path"])
+            bad = [p for p in paths if p not in valid]
+            if bad or not (paths or data.get("remove_app")):
+                return self._json({"error": "paths not allowed", "paths": bad}, 400)
+            if data.get("remove_app"):
+                paths = [app["path"]] + [p for p in paths if p != app["path"]]
+            moved, failed = appcleaner.move_to_trash(paths)
+            self._json({"moved": moved, "failed": failed})
         elif self.path == "/api/cancel":
             scanner.cancel()
             self._json({"ok": True})

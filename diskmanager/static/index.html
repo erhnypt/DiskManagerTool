@@ -22,15 +22,23 @@ main{flex:1;display:flex;min-height:0}
 .sw{width:12px;height:12px;border-radius:3px;flex:none}.tw{width:12px;color:var(--mut);cursor:pointer;flex:none;text-align:center}
 #tip{position:fixed;pointer-events:none;background:#000d;color:#fff;padding:6px 8px;border-radius:6px;font-size:12px;display:none;max-width:420px;word-break:break-all}
 #infotxt{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}#info{display:flex;gap:10px;align-items:center;padding:6px 10px;border-top:1px solid var(--line);min-height:30px;color:var(--mut)}
+#apps{flex:1;display:flex;min-height:0;position:absolute;left:0;right:0;top:calc(var(--hh,82px));bottom:0;background:var(--bg)}
+#apps[hidden]{display:none}#applist{width:340px;overflow:auto;border-right:1px solid var(--line);background:var(--pane)}
+#appdetail{flex:1;display:flex;flex-direction:column;min-width:0}#apphead{padding:10px;font-weight:600;border-bottom:1px solid var(--line)}
+#appfiles{flex:1;overflow:auto}#appbar{display:flex;gap:12px;align-items:center;padding:8px 10px;border-top:1px solid var(--line)}#apptot{flex:1;color:var(--mut);text-align:right}
 @media(max-width:800px){#types{display:none}#tree{width:200px}}
 </style></head><body>
-<header><input id="path" placeholder="Taranacak klasör (örn. /Users/ben)"><button id="scan">Tara</button><button id="cancel">Durdur</button></header>
+<header><input id="path" placeholder="Taranacak klasör (örn. /Users/ben)"><button id="scan">Tara</button><button id="cancel">Durdur</button><button id="tab">Uygulamalar</button></header>
 <div id="status">Hazır</div>
 <main>
   <div id="tree"></div>
   <div id="center"><div id="crumbs"></div><div id="map"><canvas id="cv"></canvas></div><div id="info"><span id="infotxt">Bir dosyanın üzerine gel. Çift tıkla: klasöre yakınlaş.</span><button id="reveal" disabled>Finder'da göster</button></div></div>
   <div id="types"></div>
-</main><div id="tip"></div>
+</main><section id="apps" hidden>
+  <div id="applist"></div>
+  <div id="appdetail"><div id="apphead">Soldan bir uygulama seç.</div><div id="appfiles"></div>
+    <div id="appbar"><label><input type="checkbox" id="rmapp" checked> Uygulamanın kendisini de kaldır</label><span id="apptot"></span><button id="trash" disabled>Çöp Kutusu'na taşı</button></div></div>
+</section><div id="tip"></div>
 <script>
 const $=id=>document.getElementById(id);
 const fmt=b=>{const u=['B','KB','MB','GB','TB'];let i=0;while(b>=1024&&i<4){b/=1024;i++}return b.toFixed(i?1:0)+' '+u[i]};
@@ -125,5 +133,32 @@ function treeRow(n,path,depth,total){const wrap=document.createElement('div');
   wrap.append(row,kids);return wrap}
 function markTree(){document.querySelectorAll('#tree .row').forEach(r=>r.classList.toggle('sel',r.dataset.path===cur.join('/')))}
 const esc=s=>s.replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+
+// ---- AppCleaner ----
+let apps=[],curApp=null,files=[];
+$('tab').onclick=async()=>{const a=$('apps');a.hidden=!a.hidden;$('tab').textContent=a.hidden?'Uygulamalar':'Diskim';
+  document.documentElement.style.setProperty('--hh',($('status').getBoundingClientRect().bottom)+'px');
+  if(!a.hidden)loadApps()};
+async function loadApps(){const el=$('applist');el.textContent='Yükleniyor…';apps=await api('/api/apps');el.innerHTML='';
+  if(!apps.length)el.textContent='Uygulama bulunamadı (yalnızca macOS /Applications).';
+  for(const a of apps){const r=document.createElement('div');r.className='row';
+    r.innerHTML=`<span class="n">${esc(a.name)}</span><span class="s">${fmt(a.size)}</span>`;
+    r.onclick=()=>{document.querySelectorAll('#applist .row').forEach(x=>x.classList.remove('sel'));r.classList.add('sel');pickApp(a)};el.append(r)}}
+async function pickApp(a){curApp=a;$('apphead').textContent=a.name+(a.version?' '+a.version:'')+(a.protected?' (sistem uygulaması — kaldırılamaz)':'');
+  const d=await api('/api/app-files?id='+a.id);files=d.files||[];const el=$('appfiles');el.innerHTML='';
+  files.forEach((f,i)=>{const r=document.createElement('label');r.className='row';
+    r.innerHTML=`<input type="checkbox" data-i="${i}" checked><span class="n" title="${esc(f.path)}">${esc(f.path.replace(/^.*\/Library\//,'~/Library/'))}</span><span class="s">${fmt(f.size)}</span>`;
+    r.querySelector('input').onchange=totals;el.append(r)});
+  if(!files.length)el.textContent='Artık dosya bulunamadı.';totals()}
+function checked(){return [...document.querySelectorAll('#appfiles input:checked')].map(i=>files[+i.dataset.i])}
+function totals(){const c=checked();let t=c.reduce((x,f)=>x+f.size,0);if($('rmapp').checked&&curApp)t+=curApp.size;
+  $('apptot').textContent=`${fmt(t)} geri kazanılacak`;$('trash').disabled=!curApp||curApp.protected}
+$('rmapp').onchange=totals;
+$('trash').onclick=async()=>{const c=checked(),rm=$('rmapp').checked;
+  if(!confirm(`${curApp.name}: ${c.length} artık dosya${rm?' + uygulama':''} Çöp Kutusu'na taşınsın mı?`))return;
+  const r=await api('/api/app-trash',{method:'POST',body:JSON.stringify({id:curApp.id,paths:c.map(f=>f.path),remove_app:rm})});
+  if(r.error)return alert(r.error);
+  alert(`${r.moved.length} öğe taşındı`+(r.failed.length?`, ${r.failed.length} başarısız:\n`+r.failed.map(f=>f.error).join('\n'):''));
+  loadApps();$('appfiles').innerHTML='';$('apphead').textContent='Soldan bir uygulama seç.'};
 poll();
 </script></body></html>
