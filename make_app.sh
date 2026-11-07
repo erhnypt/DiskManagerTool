@@ -8,16 +8,18 @@ REPO="$(cd "$(dirname "$0")" && pwd)"
 DEST="${1:-$HOME/Applications}"
 APP="$DEST/Disk Manager.app"
 rm -rf "$APP"
-mkdir -p "$APP/Contents/MacOS"
+mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
+cp "$REPO/assets/AppIcon.icns" "$APP/Contents/Resources/AppIcon.icns"
 cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
 <key>CFBundleName</key><string>Disk Manager</string>
 <key>CFBundleIdentifier</key><string>local.diskmanager.launcher</string>
+<key>CFBundleIconFile</key><string>AppIcon</string>
 <key>CFBundleExecutable</key><string>launch</string>
 <key>CFBundlePackageType</key><string>APPL</string>
-<key>CFBundleVersion</key><string>2</string>
+<key>CFBundleVersion</key><string>3</string>
 </dict></plist>
 PLIST
 cat > "$APP/Contents/MacOS/launch" <<LAUNCH
@@ -27,3 +29,4 @@ LAUNCH
 chmod +x "$APP/Contents/MacOS/launch"
 echo "Oluşturuldu: $APP"
 echo "Açınca Terminal penceresi gelir; sunucu orada çalışır. Durdurmak için pencereyi kapat."
+touch "$APP"  # Finder ikonu yenilesin

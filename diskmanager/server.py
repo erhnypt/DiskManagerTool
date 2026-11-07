@@ -270,7 +270,7 @@ class Handler(BaseHTTPRequestHandler):
         if not full.startswith(STATIC) or not os.path.isfile(full):
             self.send_error(404)
             return
-        ctype = {"html": "text/html", "js": "text/javascript", "css": "text/css"}.get(full.rsplit(".", 1)[-1], "application/octet-stream")
+        ctype = {"html": "text/html", "js": "text/javascript", "css": "text/css", "svg": "image/svg+xml"}.get(full.rsplit(".", 1)[-1], "application/octet-stream")
         with open(full, "rb") as f:
             body = f.read()
         self.send_response(200)
