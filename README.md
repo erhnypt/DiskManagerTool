@@ -8,10 +8,16 @@ Disk Inventory X benzeri disk kullanım görselleştirici. Python (yalnızca sta
 - **Terminalsiz uygulama:** bir kez `./make_app.sh` çalıştır; `~/Applications/Disk Manager.app` oluşur. Spotlight/Launchpad'den aç, sunucu arka planda başlar (günlük: `~/Library/Logs/DiskManager.log`). Zaten çalışıyorsa yalnızca tarayıcıyı açar. Durdurmak: `pkill -f 'python3 -m diskmanager'`. Proje klasörünü taşırsan scripti yeniden çalıştır.
 - İlk açılışta macOS "geliştirici doğrulanamadı" derse: sağ tık → Aç.
 
+## Tüm disk taraması
+
+Uygulama açılır açılmaz **tüm diski (`/`) kendiliğinden tarar**, klasör sormaz; "Yeniden tara" düğmesi aynısını tekrarlar. Sanal dosya sistemleri, `/Volumes` ve macOS'ta `/System/Volumes` (Data birimi firmlink'lerle zaten `/Users` vb. olarak görünür, ayrıca taramak her şeyi iki kez sayardı) atlanır.
+**Önemli:** macOS izin vermeyen klasörleri (Mail, Fotoğraflar, Safari…) okuyamaz. Tam sonuç için *Sistem Ayarları → Gizlilik ve Güvenlik → Tam Disk Erişimi*'ne Terminal'i (veya `DiskManager.command` açtığın uygulamayı) ekle. Okunamayan öğe sayısı durum çubuğunda görünür.
+
 ## Komut satırı
 
 ```bash
-python3 -m diskmanager ~            # klasörü tara, tarayıcıyı aç
+python3 -m diskmanager              # tüm diski tara, tarayıcıyı aç
+python3 -m diskmanager ~/Documents  # isteğe bağlı: yalnızca bir klasör
 python3 -m diskmanager --port 9000  # veya arayüzden klasör girip "Tara"
 python3 -m unittest discover -s tests -t .
 ```

@@ -6,7 +6,7 @@
 @media(prefers-color-scheme:dark){:root{--bg:#1c1c1e;--fg:#f5f5f7;--mut:#98989d;--line:#38383a;--pane:#2c2c2e;--sel:#0a84ff44}}
 *{box-sizing:border-box}body{margin:0;font:13px -apple-system,system-ui,sans-serif;background:var(--bg);color:var(--fg);height:100vh;display:flex;flex-direction:column}
 header{display:flex;gap:8px;padding:8px;border-bottom:1px solid var(--line);align-items:center}
-header input{flex:1;padding:6px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--fg)}
+#grow{flex:1}header input{flex:1;padding:6px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--fg)}
 button{padding:6px 12px;border:1px solid var(--line);border-radius:6px;background:var(--pane);color:var(--fg);cursor:pointer}
 #status{padding:4px 10px;color:var(--mut);border-bottom:1px solid var(--line);min-height:26px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 main{flex:1;display:flex;min-height:0}
@@ -28,7 +28,7 @@ main{flex:1;display:flex;min-height:0}
 #appfiles{flex:1;overflow:auto}#appbar{display:flex;gap:12px;align-items:center;padding:8px 10px;border-top:1px solid var(--line)}#apptot{flex:1;color:var(--mut);text-align:right}
 @media(max-width:800px){#side{display:none}#tree{width:200px}}
 </style></head><body>
-<header><input id="path" placeholder="Taranacak klasör (örn. /Users/ben)"><button id="scan">Tara</button><button id="cancel">Durdur</button><button id="tab">Uygulamalar</button><button id="ctab">Önbellek</button></header>
+<header><strong id="title">Disk Manager</strong><span id="grow"></span><button id="scan">Yeniden tara</button><button id="cancel">Durdur</button><button id="tab">Uygulamalar</button><button id="ctab">Önbellek</button></header>
 <div id="status">Hazır</div>
 <main>
   <div id="tree"></div>
@@ -53,15 +53,16 @@ function color(ext){if(colors[ext])return colors[ext];
   const i=types.findIndex(t=>t.ext===ext);
   const h=i>=0&&i<12?(i*137.5)%360:hue(ext);
   return colors[ext]=`hsl(${h},65%,55%)`}
+const full=parts=>(rootPath==='/'?'':rootPath)+'/'+parts.join('/');
 let selSize=0,selPath=null,cur=[],view=null,tiles=[],selTile=null,rootPath='';
 const cv=$('cv'),ctx=cv.getContext('2d');
 
-$('scan').onclick=async()=>{const r=await api('/api/scan',{method:'POST',body:JSON.stringify({path:$('path').value})});
+$('scan').onclick=async()=>{const r=await api('/api/scan',{method:'POST',body:'{}'});
   if(r.error)return $('status').textContent=r.error;poll()};
 $('cancel').onclick=()=>api('/api/cancel',{method:'POST',body:'{}'});
 
 async function poll(){
-  const s=await api('/api/status');rootPath=s.root||'';if(s.root&&!$('path').value)$('path').value=s.root;
+  const s=await api('/api/status');rootPath=s.root||'';
   if(s.running){$('status').textContent=`Taranıyor… ${s.files.toLocaleString()} dosya, ${fmt(s.bytes)} — ${s.current}`;return setTimeout(poll,400)}
   if(s.done){$('status').textContent=`Bitti: ${s.files.toLocaleString()} dosya, ${fmt(s.bytes)}`+(s.errors?` (${s.errors} erişilemeyen öğe)`:'');await load()}
 }
@@ -109,7 +110,7 @@ cv.onmousemove=e=>{const t=hit(e),tip=$('tip');if(!t){tip.style.display='none';r
   tip.textContent=`${t.path.join('/')}\n${fmt(t.it.size)}`;tip.style.whiteSpace='pre'};
 cv.onmouseleave=()=>$('tip').style.display='none';
 function select(parts,size){selPath=parts;selSize=size;$('reveal').disabled=!parts;$('rm').disabled=!parts;
-  $('infotxt').textContent=parts?`${rootPath}/${parts.join('/')} — ${fmt(size)}`:''}
+  $('infotxt').textContent=parts?`${full(parts)} — ${fmt(size)}`:''}
 cv.onclick=e=>{selTile=hit(e)||null;draw();selTile?select(selTile.path,selTile.it.size):select(null)};
 $('reveal').onclick=async()=>{if(!selPath)return;const r=await api('/api/reveal',{method:'POST',body:JSON.stringify({path:selPath.join('/')})});
   if(r.error)$('infotxt').textContent=r.error};
@@ -128,7 +129,7 @@ $('t2').onclick=async()=>{showTypes=false;$('t1').className='';$('t2').className
     r.onclick=async()=>{await navigate(f.path.slice(0,-1));
       selTile=tiles.find(t=>t.path.join('/')===f.path.join('/'))||null;draw();select(f.path,f.size)};el.append(r)}};
 $('rm').onclick=async()=>{if(!selPath)return;const name=selPath[selPath.length-1];
-  if(!confirm(`"${name}" (${fmt(selSize)}) Çöp Kutusu'na taşınsın mı?\n${rootPath}/${selPath.join('/')}`))return;
+  if(!confirm(`"${name}" (${fmt(selSize)}) Çöp Kutusu'na taşınsın mı?\n${full(selPath)}`))return;
   const r=await api('/api/trash',{method:'POST',body:JSON.stringify({path:selPath.join('/')})});
   if(r.error)return $('infotxt').textContent=r.error;
   const gone=selPath.join('/');if(cur.join('/')===gone||cur.join('/').startsWith(gone+'/'))cur=selPath.slice(0,-1);

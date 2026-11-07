@@ -139,7 +139,7 @@ class Handler(BaseHTTPRequestHandler):
             return self._json({"error": "bad json"}, 400)
         if self.path == "/api/scan":
             try:
-                scanner.start(data.get("path") or os.path.expanduser("~"))
+                scanner.start(scanner.root_path or "/")
             except (ValueError, RuntimeError) as e:
                 return self._json({"error": str(e)}, 400)
             self._json({"ok": True})
@@ -225,12 +225,11 @@ class Handler(BaseHTTPRequestHandler):
 
 def main():
     ap = argparse.ArgumentParser(description="Disk usage treemap (Disk Inventory X benzeri)")
-    ap.add_argument("path", nargs="?", help="Başlangıçta taranacak klasör")
+    ap.add_argument("path", nargs="?", default="/", help="Taranacak klasör (varsayılan: tüm disk, /)")
     ap.add_argument("--port", type=int, default=8765)
     ap.add_argument("--no-browser", action="store_true")
     args = ap.parse_args()
-    if args.path:
-        scanner.start(args.path)
+    scanner.start(args.path)  # starts scanning right away, no prompt
     # Bind to localhost only: the UI exposes your file names.
     srv = ThreadingHTTPServer(("127.0.0.1", args.port), Handler)
     url = f"http://127.0.0.1:{args.port}/"

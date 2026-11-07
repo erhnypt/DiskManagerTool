@@ -39,3 +39,14 @@ class TopAndRemoveTest(unittest.TestCase):
             self.assertEqual(s.root.files, 2)
             with self.assertRaises(ValueError):
                 s.remove(s.root)
+
+
+class SkipTest(unittest.TestCase):
+    def test_skip_paths(self):
+        with tempfile.TemporaryDirectory() as d:
+            for n in ("keep", "skipme"):
+                os.makedirs(os.path.join(d, n))
+                with open(os.path.join(d, n, "f"), "wb") as f: f.write(os.urandom(10_000))
+            s = Scanner(); s.skip = {os.path.join(os.path.abspath(d), "skipme")}
+            s.start(d); s._thread.join()
+            self.assertEqual([c.name for c in s.root.children], ["keep"])

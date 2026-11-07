@@ -1,5 +1,6 @@
 """Disk scanner: builds an in-memory size tree of a directory."""
 import os
+import sys
 import threading
 
 
@@ -23,6 +24,15 @@ class Node:
         return os.path.join(root_path, *reversed(parts))
 
 
+def default_skip():
+    """Paths left out of a whole-disk scan: virtual filesystems, other volumes
+    and (macOS) the Data volume mirror, whose contents already appear through
+    firmlinks such as /Users — scanning it too would count everything twice."""
+    if sys.platform == "darwin":
+        return {"/System/Volumes", "/Volumes", "/dev", "/.vol", "/Network", "/cores", "/.Spotlight-V100", "/.fseventsd"}
+    return {"/proc", "/sys", "/dev", "/run", "/mnt", "/media"}
+
+
 class Scanner:
     def __init__(self):
         self.root = None
@@ -33,6 +43,7 @@ class Scanner:
         self.current = ""
         self.errors = 0
         self._cancel = False
+        self.skip = default_skip()
         self._thread = None
         self._lock = threading.Lock()
 
@@ -80,6 +91,8 @@ class Scanner:
                 continue
             with it:
                 for entry in it:
+                    if entry.path in self.skip:
+                        continue
                     try:
                         st = entry.stat(follow_symlinks=False)
                         if entry.is_symlink():
