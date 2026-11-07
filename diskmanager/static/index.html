@@ -161,11 +161,20 @@ function panel(which){const hh=$('status').getBoundingClientRect().bottom;docume
 $('tab').onclick=()=>{if(panel('apps'))loadApps()};
 $('ctab').onclick=()=>{if(panel('caches'))loadCaches()};
 $('appq').oninput=e=>{const q=e.target.value.toLowerCase();document.querySelectorAll('#applist .row').forEach(r=>r.hidden=!r.dataset.q.includes(q))};
-async function loadApps(){const el=$('applist');el.textContent='Yükleniyor…';apps=await api('/api/apps');el.innerHTML='';
+let sizeTimer=null;
+async function loadApps(){const el=$('applist');el.textContent='Yükleniyor…';clearTimeout(sizeTimer);apps=await api('/api/apps');renderApps();pollSizes()}
+function renderApps(){const el=$('applist');el.innerHTML='';
   if(!apps.length)el.textContent='Uygulama bulunamadı (yalnızca macOS /Applications).';
-  for(const a of apps){const r=document.createElement('div');r.className='row';r.dataset.q=(a.name+' '+a.bundle_id).toLowerCase();
-    r.innerHTML=`<span class="n">${esc(a.name)}</span><span class="s">${fmt(a.size)}</span>`;
+  const q=$('appq').value.toLowerCase();
+  for(const a of apps){const r=document.createElement('div');r.className='row';r.dataset.q=(a.name+' '+a.bundle_id).toLowerCase();r.dataset.id=a.id;r.hidden=!r.dataset.q.includes(q);
+    if(curApp&&curApp.id===a.id)r.classList.add('sel');
+    r.innerHTML=`<span class="n">${esc(a.name)}</span><span class="s">${a.size==null?'…':fmt(a.size)}</span>`;
     r.onclick=()=>{document.querySelectorAll('#applist .row').forEach(x=>x.classList.remove('sel'));r.classList.add('sel');pickApp(a)};el.append(r)}}
+async function pollSizes(){const d=await api('/api/app-sizes');
+  for(const a of apps)if(d.sizes[a.id]!=null)a.size=d.sizes[a.id];
+  if(d.done){apps.sort((x,y)=>(y.size||0)-(x.size||0));renderApps();return}
+  document.querySelectorAll('#applist .row').forEach(r=>{const a=apps.find(x=>x.id==r.dataset.id);if(a&&a.size!=null)r.querySelector('.s').textContent=fmt(a.size)});
+  sizeTimer=setTimeout(pollSizes,1000)}
 async function pickApp(a){curApp=a;$('apphead').textContent=a.name+(a.version?' '+a.version:'')+(a.protected?' (sistem uygulaması — kaldırılamaz)':'');
   const d=await api('/api/app-files?id='+a.id);files=d.files||[];const el=$('appfiles');el.innerHTML='';
   files.forEach((f,i)=>{const r=document.createElement('label');r.className='row';
@@ -173,7 +182,7 @@ async function pickApp(a){curApp=a;$('apphead').textContent=a.name+(a.version?' 
     r.querySelector('input').onchange=totals;el.append(r)});
   if(!files.length)el.textContent='Artık dosya bulunamadı.';totals()}
 function checked(){return [...document.querySelectorAll('#appfiles input:checked')].map(i=>files[+i.dataset.i])}
-function totals(){const c=checked();let t=c.reduce((x,f)=>x+f.size,0);if($('rmapp').checked&&curApp)t+=curApp.size;
+function totals(){const c=checked();let t=c.reduce((x,f)=>x+f.size,0);if($('rmapp').checked&&curApp)t+=curApp.size||0;
   $('apptot').textContent=`${fmt(t)} geri kazanılacak`;$('trash').disabled=!curApp||curApp.protected}
 $('rmapp').onchange=totals;
 $('trash').onclick=async()=>{const c=checked(),rm=$('rmapp').checked;

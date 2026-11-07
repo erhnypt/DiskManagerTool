@@ -6,6 +6,7 @@ import os
 import shutil
 import subprocess
 import sys
+import threading
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
@@ -19,6 +20,7 @@ scanner = Scanner()
 # id -> (app, {path: leftover}) from the last lookup; trash requests are
 # validated against this so the client can never name arbitrary paths.
 app_cache = {}
+app_sizes = {}  # {"state": {"sizes": {id: size}, "done": bool}}, filled by a background thread
 cache_items = {}  # path -> item from the last /api/caches listing
 
 
@@ -122,14 +124,28 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json({"error": "no scan"}, 404)
             self._json(type_stats(scanner.root))
         elif u.path == "/api/apps":
-            apps = appcleaner.list_apps()
+            # Return the list at once; sizes (slow: walks every bundle) are
+            # computed in the background and fetched via /api/app-sizes.
+            apps = appcleaner.list_apps(with_size=False)
             for i, a in enumerate(apps):
                 a["id"] = i
                 a["protected"] = appcleaner.is_protected(a)
             app_cache.clear()
             for a in apps:
                 app_cache[a["id"]] = (a, None)
+            state = {"sizes": {}, "done": False}
+
+            def compute(items, state):
+                for a in items:
+                    state["sizes"][a["id"]] = appcleaner.path_size(a["path"])
+                state["done"] = True
+
+            threading.Thread(target=compute, args=(list(apps), state), daemon=True).start()
+            app_sizes["state"] = state
             self._json(apps)
+        elif u.path == "/api/app-sizes":
+            st = app_sizes.get("state") or {"sizes": {}, "done": True}
+            self._json({"sizes": st["sizes"], "done": st["done"]})
         elif u.path == "/api/caches":
             items = appcleaner.list_caches()
             cache_items.clear()

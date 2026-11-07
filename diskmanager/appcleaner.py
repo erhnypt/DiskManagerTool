@@ -63,7 +63,7 @@ def read_app(app_path):
     }
 
 
-def list_apps(app_dirs=None):
+def list_apps(app_dirs=None, with_size=True):
     apps = []
     for d in app_dirs or APP_DIRS:
         try:
@@ -74,9 +74,10 @@ def list_apps(app_dirs=None):
             if e.endswith(".app"):
                 a = read_app(os.path.join(d, e))
                 if a:
-                    a["size"] = path_size(a["path"])
+                    a["size"] = path_size(a["path"]) if with_size else None
                     apps.append(a)
-    apps.sort(key=lambda a: a["size"], reverse=True)
+    if with_size:
+        apps.sort(key=lambda a: a["size"], reverse=True)
     return apps
 
 
