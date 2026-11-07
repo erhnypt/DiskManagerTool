@@ -18,28 +18,43 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 <key>CFBundleVersion</key><string>1</string>
 </dict></plist>
 PLIST
+# supervise: keeps the server alive. If it dies (crash, kill) it is restarted and
+# the exit code is logged, so we can see why it stopped.
+cat > "$APP/Contents/MacOS/supervise" <<SUPERVISE
+#!/bin/bash
+PORT=\${DISKMANAGER_PORT:-8765}
+LOG="\$HOME/Library/Logs/DiskManager.log"
+mkdir -p "\$HOME/Library/Logs"
+cd "$REPO" || exit 1
+while true; do
+  echo "\$(date '+%F %T') sunucu başlıyor (port \$PORT)" >> "\$LOG"
+  python3 -X faulthandler -u -m diskmanager --no-browser --port "\$PORT" >> "\$LOG" 2>&1
+  rc=\$?
+  echo "\$(date '+%F %T') sunucu kapandı, çıkış kodu \$rc (137=zorla öldürüldü, 139=çöktü)" >> "\$LOG"
+  sleep 2
+done
+SUPERVISE
 cat > "$APP/Contents/MacOS/launch" <<LAUNCH
 #!/bin/bash
 REPO="$REPO"
 PORT=\${DISKMANAGER_PORT:-8765}
 URL="http://127.0.0.1:\$PORT/"
 OPEN=\$(command -v open || command -v xdg-open)
-# Restart the background server if it runs outdated code (e.g. after git pull).
-if curl -s -o /dev/null "\${URL}api/status"; then
+SUP="$APP/Contents/MacOS/supervise"
+up() { curl -s -o /dev/null "\${URL}api/status"; }
+# Server running outdated code (e.g. after git pull)? Kill it; the supervisor restarts it.
+if up; then
   NEW=\$(cd "\$REPO" && python3 -c "from diskmanager.server import code_version; print(code_version())" 2>/dev/null)
-  RUN=\$(curl -s "\${URL}api/version" | sed -n 's/.*"version": "\\([0-9a-f]*\\)".*/\\1/p')
+  RUN=\$(curl -s "\${URL}api/version.txt")
   if [ -n "\$NEW" ] && [ "\$NEW" != "\$RUN" ]; then
     pkill -f "diskmanager --no-browser --port \$PORT"; sleep 1
   fi
 fi
-if ! curl -s -o /dev/null "\${URL}api/status"; then
-  mkdir -p "\$HOME/Library/Logs"
-  cd "\$REPO" || exit 1
-  nohup python3 -m diskmanager --no-browser --port "\$PORT" >> "\$HOME/Library/Logs/DiskManager.log" 2>&1 &
-  for _ in \$(seq 1 50); do curl -s -o /dev/null "\${URL}api/status" && break; sleep 0.2; done
-fi
+pgrep -f "\$SUP" >/dev/null || { nohup "\$SUP" >/dev/null 2>&1 & }
+for _ in \$(seq 1 75); do up && break; sleep 0.2; done
 "\$OPEN" "\$URL"
 LAUNCH
+chmod +x "$APP/Contents/MacOS/supervise"
 chmod +x "$APP/Contents/MacOS/launch"
 echo "Oluşturuldu: $APP"
-echo "Durdurmak için: pkill -f 'python3 -m diskmanager'"
+echo "Durdurmak için: ./stop.sh   |   Günlük: ~/Library/Logs/DiskManager.log"

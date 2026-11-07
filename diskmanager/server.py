@@ -1,5 +1,6 @@
 """Local web server: JSON API + static treemap UI. Standard library only."""
 import argparse
+import faulthandler
 import hashlib
 import json
 import os
@@ -109,6 +110,13 @@ class Handler(BaseHTTPRequestHandler):
                     pass
             self._json({"seen": scanner.bytes_seen, "used": used,
                         "elapsed": round(time.time() - scanner.started_at, 1) if scanner.running else 0})
+        elif u.path == "/api/version.txt":  # plain text: easy for the shell launcher
+            body = VERSION.encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "text/plain")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
         elif u.path == "/api/version":
             self._json({"version": VERSION})
         elif u.path == "/api/status":
@@ -273,11 +281,13 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main():
+    faulthandler.enable()  # Python traceback in the log on a fatal crash
     ap = argparse.ArgumentParser(description="Disk usage treemap (Disk Inventory X benzeri)")
     ap.add_argument("path", nargs="?", default="/", help="Taranacak klasör (varsayılan: tüm disk, /)")
     ap.add_argument("--port", type=int, default=8765)
     ap.add_argument("--no-browser", action="store_true")
     args = ap.parse_args()
+    print(time.strftime("%F %T"), "tarama başlıyor:", args.path, flush=True)
     scanner.start(args.path)  # starts scanning right away, no prompt
     # Bind to localhost only: the UI exposes your file names.
     srv = ThreadingHTTPServer(("127.0.0.1", args.port), Handler)
