@@ -21,3 +21,21 @@ class ScannerTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TopAndRemoveTest(unittest.TestCase):
+    def test_top_and_remove(self):
+        with tempfile.TemporaryDirectory() as d:
+            os.makedirs(os.path.join(d, "x"))
+            for name, n in [("a", 100_000), ("x/b", 300_000), ("c", 10_000)]:
+                with open(os.path.join(d, name), "wb") as f: f.write(os.urandom(n))
+            s = Scanner(); s.start(d); s._thread.join()
+            top = s.top_files(2)
+            self.assertEqual([p for _, p in top], [["x", "b"], ["a"]])
+            before = s.root.size
+            node = s.find(["x"]); sz = node.size
+            s.remove(node)
+            self.assertEqual(s.root.size, before - sz)
+            self.assertEqual(s.root.files, 2)
+            with self.assertRaises(ValueError):
+                s.remove(s.root)

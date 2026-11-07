@@ -15,7 +15,7 @@ main{flex:1;display:flex;min-height:0}
 #crumbs{padding:6px 10px;border-bottom:1px solid var(--line);color:var(--mut)}
 #crumbs a{cursor:pointer;color:var(--fg)}#crumbs a:hover{text-decoration:underline}
 #map{flex:1;position:relative;min-height:0}canvas{position:absolute;inset:0;width:100%;height:100%}
-#types{width:230px;overflow:auto;border-left:1px solid var(--line);background:var(--pane)}
+#side{width:260px;display:flex;flex-direction:column;border-left:1px solid var(--line);background:var(--pane);min-height:0}#types{flex:1;overflow:auto}#stabs{display:flex;border-bottom:1px solid var(--line)}#stabs a{flex:1;text-align:center;padding:6px;cursor:pointer;color:var(--mut)}#stabs a.on{color:var(--fg);font-weight:600;border-bottom:2px solid #0a84ff}
 .row{display:flex;align-items:center;gap:6px;padding:2px 8px;white-space:nowrap;cursor:default}
 .row:hover{background:var(--sel)}.row.sel{background:var(--sel)}
 .row .n{flex:1;overflow:hidden;text-overflow:ellipsis}.row .s{color:var(--mut);font-variant-numeric:tabular-nums}
@@ -26,14 +26,14 @@ main{flex:1;display:flex;min-height:0}
 #apps[hidden]{display:none}#applist{width:340px;overflow:auto;border-right:1px solid var(--line);background:var(--pane)}
 #appdetail{flex:1;display:flex;flex-direction:column;min-width:0}#apphead{padding:10px;font-weight:600;border-bottom:1px solid var(--line)}
 #appfiles{flex:1;overflow:auto}#appbar{display:flex;gap:12px;align-items:center;padding:8px 10px;border-top:1px solid var(--line)}#apptot{flex:1;color:var(--mut);text-align:right}
-@media(max-width:800px){#types{display:none}#tree{width:200px}}
+@media(max-width:800px){#side{display:none}#tree{width:200px}}
 </style></head><body>
 <header><input id="path" placeholder="Taranacak klasör (örn. /Users/ben)"><button id="scan">Tara</button><button id="cancel">Durdur</button><button id="tab">Uygulamalar</button></header>
 <div id="status">Hazır</div>
 <main>
   <div id="tree"></div>
-  <div id="center"><div id="crumbs"></div><div id="map"><canvas id="cv"></canvas></div><div id="info"><span id="infotxt">Bir dosyanın üzerine gel. Çift tıkla: klasöre yakınlaş.</span><button id="reveal" disabled>Finder'da göster</button></div></div>
-  <div id="types"></div>
+  <div id="center"><div id="crumbs"></div><div id="map"><canvas id="cv"></canvas></div><div id="info"><span id="infotxt">Bir dosyanın üzerine gel. Çift tıkla: klasöre yakınlaş.</span><button id="reveal" disabled>Finder'da göster</button><button id="rm" disabled>Çöp Kutusu'na taşı</button></div></div>
+  <div id="side"><div id="stabs"><a id="t1" class="on">Türler</a><a id="t2">En büyük 100</a></div><div id="types"></div></div>
 </main><section id="apps" hidden>
   <div id="applist"></div>
   <div id="appdetail"><div id="apphead">Soldan bir uygulama seç.</div><div id="appfiles"></div>
@@ -43,13 +43,13 @@ main{flex:1;display:flex;min-height:0}
 const $=id=>document.getElementById(id);
 const fmt=b=>{const u=['B','KB','MB','GB','TB'];let i=0;while(b>=1024&&i<4){b/=1024;i++}return b.toFixed(i?1:0)+' '+u[i]};
 const api=(p,o)=>fetch(p,o).then(r=>r.json());
-const colors={};let types=[];
+let showTypes=true;const colors={};let types=[];
 const hue=s=>{let h=0;for(const c of s)h=(h*31+c.charCodeAt(0))>>>0;return h%360};
 function color(ext){if(colors[ext])return colors[ext];
   const i=types.findIndex(t=>t.ext===ext);
   const h=i>=0&&i<12?(i*137.5)%360:hue(ext);
   return colors[ext]=`hsl(${h},65%,55%)`}
-let selPath=null,cur=[],view=null,tiles=[],selTile=null,rootPath='';
+let selSize=0,selPath=null,cur=[],view=null,tiles=[],selTile=null,rootPath='';
 const cv=$('cv'),ctx=cv.getContext('2d');
 
 $('scan').onclick=async()=>{const r=await api('/api/scan',{method:'POST',body:JSON.stringify({path:$('path').value})});
@@ -104,7 +104,7 @@ cv.onmousemove=e=>{const t=hit(e),tip=$('tip');if(!t){tip.style.display='none';r
   tip.style.display='block';tip.style.left=e.clientX+14+'px';tip.style.top=e.clientY+14+'px';
   tip.textContent=`${t.path.join('/')}\n${fmt(t.it.size)}`;tip.style.whiteSpace='pre'};
 cv.onmouseleave=()=>$('tip').style.display='none';
-function select(parts,size){selPath=parts;$('reveal').disabled=!parts;
+function select(parts,size){selPath=parts;selSize=size;$('reveal').disabled=!parts;$('rm').disabled=!parts;
   $('infotxt').textContent=parts?`${rootPath}/${parts.join('/')} — ${fmt(size)}`:''}
 cv.onclick=e=>{selTile=hit(e)||null;draw();selTile?select(selTile.path,selTile.it.size):select(null)};
 $('reveal').onclick=async()=>{if(!selPath)return;const r=await api('/api/reveal',{method:'POST',body:JSON.stringify({path:selPath.join('/')})});
@@ -112,10 +112,24 @@ $('reveal').onclick=async()=>{if(!selPath)return;const r=await api('/api/reveal'
 cv.ondblclick=e=>{const t=hit(e);if(t){const parts=t.path.slice(0,t.path.length-1);navigate(parts.length>cur.length?parts.slice(0,cur.length+1):parts)}};
 addEventListener('resize',draw);
 
-function renderTypes(){const el=$('types');el.innerHTML='';const tot=types.reduce((a,t)=>a+t.size,0)||1;
+function renderTypes(){showTypes=true;$('t1').className='on';$('t2').className='';const el=$('types');el.innerHTML='';const tot=types.reduce((a,t)=>a+t.size,0)||1;
   for(const t of types.slice(0,60)){const r=document.createElement('div');r.className='row';
     r.innerHTML=`<span class="sw" style="background:${color(t.ext)}"></span><span class="n">${t.ext}</span><span class="s">${fmt(t.size)} · ${(t.size/tot*100).toFixed(1)}%</span>`;
     r.title=`${t.count.toLocaleString()} dosya`;el.append(r)}}
+
+$('t1').onclick=renderTypes;
+$('t2').onclick=async()=>{showTypes=false;$('t1').className='';$('t2').className='on';const el=$('types');el.innerHTML='';
+  for(const f of await api('/api/top?n=100')){const r=document.createElement('div');r.className='row';
+    r.title=f.path.join('/');r.innerHTML=`<span class="n">${esc(f.path[f.path.length-1])}</span><span class="s">${fmt(f.size)}</span>`;
+    r.onclick=async()=>{await navigate(f.path.slice(0,-1));
+      selTile=tiles.find(t=>t.path.join('/')===f.path.join('/'))||null;draw();select(f.path,f.size)};el.append(r)}};
+$('rm').onclick=async()=>{if(!selPath)return;const name=selPath[selPath.length-1];
+  if(!confirm(`"${name}" (${fmt(selSize)}) Çöp Kutusu'na taşınsın mı?\n${rootPath}/${selPath.join('/')}`))return;
+  const r=await api('/api/trash',{method:'POST',body:JSON.stringify({path:selPath.join('/')})});
+  if(r.error)return $('infotxt').textContent=r.error;
+  const gone=selPath.join('/');if(cur.join('/')===gone||cur.join('/').startsWith(gone+'/'))cur=selPath.slice(0,-1);
+  types=await api('/api/types');showTypes?renderTypes():$('t2').onclick();await navigate(cur);renderTree();
+  $('infotxt').textContent=`Taşındı: ${name} (${fmt(r.size)})`};
 
 // Lazy folder tree
 async function renderTree(){const el=$('tree');el.innerHTML='';const root=await api('/api/node?depth=1&path=');

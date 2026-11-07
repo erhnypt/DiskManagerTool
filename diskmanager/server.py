@@ -92,6 +92,11 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json({"error": "not found"}, 404)
             depth = int(q.get("depth", ["1"])[0])
             self._json(node_json(n, min(depth, 6)))
+        elif u.path == "/api/top":
+            if scanner.root is None:
+                return self._json({"error": "no scan"}, 404)
+            n = max(1, min(int(q.get("n", ["100"])[0]), 1000))
+            self._json([{"size": sz, "path": parts} for sz, parts in scanner.top_files(n)])
         elif u.path == "/api/types":
             if scanner.root is None:
                 return self._json({"error": "no scan"}, 404)
@@ -147,6 +152,21 @@ class Handler(BaseHTTPRequestHandler):
             except OSError as e:
                 return self._json({"error": str(e)}, 500)
             self._json({"ok": True})
+        elif self.path == "/api/trash":
+            if scanner.root is None or scanner.running:
+                return self._json({"error": "scan not finished"}, 409)
+            parts = [p for p in str(data.get("path", "")).split("/") if p]
+            n = scanner.find(parts) if parts else None  # the scan root is never allowed
+            if n is None:
+                return self._json({"error": "not found"}, 404)
+            full = n.path(scanner.root_path)
+            if not os.path.lexists(full):
+                return self._json({"error": "file no longer exists"}, 404)
+            moved, failed = appcleaner.move_to_trash([full])
+            if failed:
+                return self._json({"error": failed[0]["error"]}, 500)
+            scanner.remove(n)
+            self._json({"ok": True, "size": n.size})
         elif self.path == "/api/app-trash":
             entry = app_cache.get(data.get("id"))
             if entry is None or entry[1] is None:

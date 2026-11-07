@@ -119,6 +119,40 @@ class Scanner:
                 n.files = sum(1 if not c.is_dir else c.files for c in n.children)
                 n.children.sort(key=lambda c: c.size, reverse=True)
 
+    def remove(self, node):
+        """Detach a node (after it was trashed) and fix ancestor totals."""
+        if node.parent is None:
+            raise ValueError("cannot remove the scan root")
+        node.parent.children.remove(node)
+        count = node.files if node.is_dir else 1
+        a = node.parent
+        while a is not None:
+            a.size -= node.size
+            a.files -= count
+            a = a.parent
+
+    def top_files(self, n=100):
+        """The n largest files in the tree as (size, relative parts)."""
+        import heapq
+        found = []
+        stack = [self.root]
+        while stack:
+            d = stack.pop()
+            for c in d.children:
+                if c.is_dir:
+                    stack.append(c)
+                else:
+                    found.append(c)
+        best = heapq.nlargest(n, found, key=lambda c: c.size)
+        out = []
+        for c in best:
+            parts, x = [], c
+            while x.parent is not None:
+                parts.append(x.name)
+                x = x.parent
+            out.append((c.size, list(reversed(parts))))
+        return out
+
     def find(self, rel_parts):
         n = self.root
         for part in rel_parts:
