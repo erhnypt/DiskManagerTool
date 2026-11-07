@@ -7,6 +7,7 @@ import shutil
 import subprocess
 import sys
 import threading
+import time
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
@@ -103,6 +104,8 @@ class Handler(BaseHTTPRequestHandler):
             self._json({"running": scanner.running, "files": scanner.files_seen,
                         "bytes": scanner.bytes_seen, "current": scanner.current,
                         "errors": scanner.errors, "root": scanner.root_path,
+                        "error": scanner.error, "cancelled": scanner.cancelled,
+                        "stalled": round(time.time() - scanner.current_since) if scanner.running else 0,
                         "done": scanner.root is not None and not scanner.running})
         elif u.path == "/api/node":
             if scanner.root is None:

@@ -59,11 +59,16 @@ const cv=$('cv'),ctx=cv.getContext('2d');
 
 $('scan').onclick=async()=>{const r=await api('/api/scan',{method:'POST',body:'{}'});
   if(r.error)return $('status').textContent=r.error;poll()};
-$('cancel').onclick=()=>api('/api/cancel',{method:'POST',body:'{}'});
+$('cancel').onclick=async()=>{await api('/api/cancel',{method:'POST',body:'{}'});poll()};
 
 async function poll(){
-  const s=await api('/api/status');rootPath=s.root||'';
-  if(s.running){$('status').textContent=`Taranıyor… ${s.files.toLocaleString()} dosya, ${fmt(s.bytes)} — ${s.current}`;return setTimeout(poll,400)}
+  let s;try{s=await api('/api/status')}catch(e){$('status').textContent='Sunucuya ulaşılamıyor — uygulamayı yeniden aç (Disk Manager.app). Tekrar deneniyor…';return setTimeout(poll,2000)}
+  rootPath=s.root||'';
+  if(s.running){let t=`Taranıyor… ${s.files.toLocaleString()} dosya, ${fmt(s.bytes)} — ${s.current}`;
+    if(s.stalled>8)t=`⚠ ${s.stalled} sn'dir bu klasörde bekliyor (iCloud/ağ sürücüsü olabilir): ${s.current} — Durdur'a basıp yeniden tara. ${s.files.toLocaleString()} dosya görüldü.`;
+    $('status').textContent=t;return setTimeout(poll,400)}
+  if(s.error)return $('status').textContent=`Tarama hata ile durdu: ${s.error}`;
+  if(s.cancelled)return $('status').textContent=`Tarama durduruldu (${s.files.toLocaleString()} dosya görülmüştü). "Yeniden tara" ile tekrar başlat.`;
   if(s.done){$('status').textContent=`Bitti: ${s.files.toLocaleString()} dosya, ${fmt(s.bytes)}`+(s.errors?` (${s.errors} erişilemeyen öğe)`:'');await load()}
 }
 async function load(){

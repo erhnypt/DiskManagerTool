@@ -50,3 +50,56 @@ class SkipTest(unittest.TestCase):
             s = Scanner(); s.skip = {os.path.join(os.path.abspath(d), "skipme")}
             s.start(d); s._thread.join()
             self.assertEqual([c.name for c in s.root.children], ["keep"])
+
+
+class RobustnessTest(unittest.TestCase):
+    def test_listing_error_does_not_kill_scan(self):
+        import unittest.mock as m
+        real = os.scandir
+
+        class Boom:
+            def __init__(self, it): self.it = it; self.n = 0
+            def __enter__(self): return self
+            def __exit__(self, *a): self.it.close()
+            def __iter__(self): return self
+            def __next__(self):
+                self.n += 1
+                if self.n == 2: raise OSError("dir vanished")
+                return next(self.it)
+
+        with tempfile.TemporaryDirectory() as d:
+            for n in "abc":
+                open(os.path.join(d, n), "wb").write(b"x" * 5000)
+            with m.patch("os.scandir", lambda p: Boom(real(p))):
+                s = Scanner(); s.start(d); s._thread = None
+                import time
+                for _ in range(100):
+                    if not s.running: break
+                    time.sleep(0.02)
+            self.assertFalse(s.running)
+            self.assertIsNotNone(s.root)  # finished, not crashed
+            self.assertEqual(s.errors, 1)
+
+    def test_cancel_works_even_if_worker_is_blocked(self):
+        import threading, time, unittest.mock as m
+        block = threading.Event()
+        real = os.scandir
+        with tempfile.TemporaryDirectory() as d:
+            os.makedirs(os.path.join(d, "hang"))
+            def slow(p):
+                if p.endswith("hang"): block.wait(5)
+                return real(p)
+            with m.patch("os.scandir", slow):
+                s = Scanner(); s.start(d)
+                time.sleep(0.2)
+                self.assertTrue(s.running)
+                t = time.time(); s.cancel()
+                self.assertFalse(s.running); self.assertTrue(s.cancelled)
+                self.assertLess(time.time() - t, 0.5)
+                s.start(d)  # a new scan may start while the old worker hangs
+                block.set()
+                for _ in range(100):
+                    if not s.running: break
+                    time.sleep(0.02)
+                self.assertIsNotNone(s.root)
+                self.assertFalse(s.cancelled)

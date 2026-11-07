@@ -1,6 +1,8 @@
 """Disk scanner: builds an in-memory size tree of a directory."""
+import glob
 import os
 import sys
+import time
 import threading
 
 
@@ -29,7 +31,11 @@ def default_skip():
     and (macOS) the Data volume mirror, whose contents already appear through
     firmlinks such as /Users — scanning it too would count everything twice."""
     if sys.platform == "darwin":
-        return {"/System/Volumes", "/Volumes", "/dev", "/.vol", "/Network", "/cores", "/.Spotlight-V100", "/.fseventsd"}
+        cloud = set()
+        for home in glob.glob("/Users/*"):
+            cloud.add(os.path.join(home, "Library", "CloudStorage"))
+            cloud.add(os.path.join(home, "Library", "Mobile Documents"))
+        return cloud | {"/System/Volumes", "/Volumes", "/dev", "/.vol", "/Network", "/cores", "/.Spotlight-V100", "/.fseventsd"}
     return {"/proc", "/sys", "/dev", "/run", "/mnt", "/media"}
 
 
@@ -38,12 +44,15 @@ class Scanner:
         self.root = None
         self.root_path = None
         self.running = False
+        self.cancelled = False
+        self.error = None
         self.files_seen = 0
         self.bytes_seen = 0
         self.current = ""
+        self.current_since = time.time()
         self.errors = 0
-        self._cancel = False
         self.skip = default_skip()
+        self._gen = 0  # bumped by start()/cancel(); a stale worker exits quietly
         self._thread = None
         self._lock = threading.Lock()
 
@@ -54,43 +63,74 @@ class Scanner:
         with self._lock:
             if self.running:
                 raise RuntimeError("A scan is already running")
+            self._gen += 1
+            gen = self._gen
             self.running = True
-            self._cancel = False
+            self.cancelled = False
+            self.error = None
             self.files_seen = self.bytes_seen = self.errors = 0
+            self.current, self.current_since = path, time.time()
             self.root = None
             self.root_path = path
-        self._thread = threading.Thread(target=self._run, args=(path,), daemon=True)
+        self._thread = threading.Thread(target=self._run, args=(path, gen), daemon=True)
         self._thread.start()
 
     def cancel(self):
-        self._cancel = True
+        """Stop at once. A worker blocked inside a syscall (iCloud / network
+        folders) cannot be interrupted, so the scan is detached instead: the
+        generation changes, the state resets immediately and the stale worker
+        exits as soon as it wakes up, without touching the new state."""
+        with self._lock:
+            if self.running:
+                self._gen += 1
+                self.running = False
+                self.cancelled = True
+                self.root = None
 
-    def _run(self, path):
+    def _alive(self, gen):
+        return gen == self._gen
+
+    def _run(self, path, gen):
         try:
             root = Node(path, is_dir=True)
-            seen_inodes = set()
-            self._walk(path, root, seen_inodes)
+            self._walk(path, root, set(), gen)
+            if not self._alive(gen):
+                return
             self._finalize(root)
             root.name = path
             self.root = root
+        except Exception as e:  # never die silently: surface it in the UI
+            if self._alive(gen):
+                self.error = f"{type(e).__name__}: {e}"
         finally:
-            self.running = False
+            with self._lock:
+                if self._alive(gen):
+                    self.running = False
 
-    def _walk(self, path, node, seen):
+    def _walk(self, path, node, seen, gen):
         # Iterative DFS to avoid recursion limits on deep trees.
         stack = [(path, node)]
         while stack:
-            if self._cancel:
+            if not self._alive(gen):
                 return
             dpath, dnode = stack.pop()
-            self.current = dpath
+            self.current, self.current_since = dpath, time.time()
             try:
                 it = os.scandir(dpath)
             except OSError:
                 self.errors += 1
                 continue
             with it:
-                for entry in it:
+                while True:
+                    try:
+                        entry = next(it)
+                    except StopIteration:
+                        break
+                    except OSError:  # directory changed/unreadable mid-listing
+                        self.errors += 1
+                        break
+                    if not self._alive(gen):
+                        return
                     if entry.path in self.skip:
                         continue
                     try:
@@ -114,7 +154,7 @@ class Scanner:
                             dnode.children.append(child)
                             self.files_seen += 1
                             self.bytes_seen += size
-                    except OSError:
+                    except (OSError, ValueError):
                         self.errors += 1
 
     def _finalize(self, root):
