@@ -50,6 +50,7 @@ class Scanner:
         self.bytes_seen = 0
         self.current = ""
         self.current_since = time.time()
+        self.started_at = time.time()
         self.errors = 0
         self.skip = default_skip()
         self._gen = 0  # bumped by start()/cancel(); a stale worker exits quietly
@@ -70,6 +71,7 @@ class Scanner:
             self.error = None
             self.files_seen = self.bytes_seen = self.errors = 0
             self.current, self.current_since = path, time.time()
+            self.started_at = time.time()
             self.root = None
             self.root_path = path
         self._thread = threading.Thread(target=self._run, args=(path, gen), daemon=True)

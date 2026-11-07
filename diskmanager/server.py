@@ -98,7 +98,18 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         u = urlparse(self.path)
         q = parse_qs(u.query)
-        if u.path == "/api/version":
+        if u.path == "/api/progress":
+            # Estimate: bytes found so far vs. bytes used on the disk. Only
+            # meaningful for a whole-disk scan, so other roots get no total.
+            used = None
+            if scanner.root_path == "/":
+                try:
+                    used = shutil.disk_usage("/")[1]
+                except OSError:
+                    pass
+            self._json({"seen": scanner.bytes_seen, "used": used,
+                        "elapsed": round(time.time() - scanner.started_at, 1) if scanner.running else 0})
+        elif u.path == "/api/version":
             self._json({"version": VERSION})
         elif u.path == "/api/status":
             self._json({"running": scanner.running, "files": scanner.files_seen,

@@ -8,7 +8,7 @@
 header{display:flex;gap:8px;padding:8px;border-bottom:1px solid var(--line);align-items:center}
 #grow{flex:1}header input{flex:1;padding:6px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--fg)}
 button{padding:6px 12px;border:1px solid var(--line);border-radius:6px;background:var(--pane);color:var(--fg);cursor:pointer}
-#status{padding:4px 10px;color:var(--mut);border-bottom:1px solid var(--line);min-height:26px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#bar{position:relative;height:22px;background:var(--pane);border-bottom:1px solid var(--line)}#bar[hidden]{display:none}#fill{height:100%;width:0;background:#0a84ff;transition:width .3s}#pct{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-weight:600;font-variant-numeric:tabular-nums;color:var(--fg);mix-blend-mode:normal;text-shadow:0 0 3px var(--bg),0 0 3px var(--bg)}#status{padding:4px 10px;color:var(--mut);border-bottom:1px solid var(--line);min-height:26px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 main{flex:1;display:flex;min-height:0}
 #tree{width:300px;overflow:auto;border-right:1px solid var(--line);padding:4px 0;background:var(--pane)}
 #center{flex:1;display:flex;flex-direction:column;min-width:0}
@@ -29,7 +29,7 @@ main{flex:1;display:flex;min-height:0}
 @media(max-width:800px){#side{display:none}#tree{width:200px}}
 </style></head><body>
 <header><strong id="title">Disk Manager</strong><span id="grow"></span><button id="scan">Yeniden tara</button><button id="cancel">Durdur</button><button id="tab">Uygulamalar</button><button id="ctab">Önbellek</button></header>
-<div id="status">Hazır</div>
+<div id="status">Hazır</div><div id="bar" hidden><div id="fill"></div><span id="pct"></span></div>
 <main>
   <div id="tree"></div>
   <div id="center"><div id="crumbs"></div><div id="map"><canvas id="cv"></canvas></div><div id="info"><span id="infotxt">Bir dosyanın üzerine gel. Çift tıkla: klasöre yakınlaş.</span><button id="reveal" disabled>Finder'da göster</button><button id="rm" disabled>Çöp Kutusu'na taşı</button></div></div>
@@ -61,15 +61,22 @@ $('scan').onclick=async()=>{const r=await api('/api/scan',{method:'POST',body:'{
   if(r.error)return $('status').textContent=r.error;poll()};
 $('cancel').onclick=async()=>{await api('/api/cancel',{method:'POST',body:'{}'});poll()};
 
+async function progress(){
+  try{const p=await api('/api/progress');const bar=$('bar');bar.hidden=false;
+    if(p.used){const pct=Math.min(99,p.seen/p.used*100);$('fill').style.width=pct+'%';
+      let eta='';if(p.elapsed>5&&p.seen>0){const left=(p.used-p.seen)/(p.seen/p.elapsed);if(left>0&&left<86400)eta=left>90?` · ~${Math.round(left/60)} dk kaldı`:` · ~${Math.round(left)} sn kaldı`}
+      $('pct').textContent=`%${pct.toFixed(0)} — ${fmt(p.seen)} / ${fmt(p.used)} (tahmini)${eta}`}
+    else{$('fill').style.width='100%';$('fill').style.opacity='.3';$('pct').textContent=`${fmt(p.seen)} tarandı`}
+  }catch(e){}}
 async function poll(){
   let s;try{s=await api('/api/status')}catch(e){$('status').textContent='Sunucuya ulaşılamıyor — uygulamayı yeniden aç (Disk Manager.app). Tekrar deneniyor…';return setTimeout(poll,2000)}
   rootPath=s.root||'';
-  if(s.running){let t=`Taranıyor… ${s.files.toLocaleString()} dosya, ${fmt(s.bytes)} — ${s.current}`;
+  if(s.running){progress();let t=`Taranıyor… ${s.files.toLocaleString()} dosya, ${fmt(s.bytes)} — ${s.current}`;
     if(s.stalled>8)t=`⚠ ${s.stalled} sn'dir bu klasörde bekliyor (iCloud/ağ sürücüsü olabilir): ${s.current} — Durdur'a basıp yeniden tara. ${s.files.toLocaleString()} dosya görüldü.`;
     $('status').textContent=t;return setTimeout(poll,400)}
   if(s.error)return $('status').textContent=`Tarama hata ile durdu: ${s.error}`;
   if(s.cancelled)return $('status').textContent=`Tarama durduruldu (${s.files.toLocaleString()} dosya görülmüştü). "Yeniden tara" ile tekrar başlat.`;
-  if(s.done){$('status').textContent=`Bitti: ${s.files.toLocaleString()} dosya, ${fmt(s.bytes)}`+(s.errors?` (${s.errors} erişilemeyen öğe)`:'');await load()}
+  if(s.done){$('fill').style.width='100%';$('fill').style.opacity='1';$('pct').textContent='%100 — tamamlandı';$('status').textContent=`Bitti: ${s.files.toLocaleString()} dosya, ${fmt(s.bytes)}`+(s.errors?` (${s.errors} erişilemeyen öğe)`:'');await load()}
 }
 async function load(){
   types=await api('/api/types');for(const k in colors)delete colors[k];
